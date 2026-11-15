@@ -8801,7 +8801,7 @@ ${hint}`;
             systemInstructionText(existingSystemInstruction)
           ].map((value) => value.trim()).filter(Boolean).join("\n\n");
           let movedToUser = false;
-          if (existingText.trim().length > 0 && isGemini3Model(effectiveModel)) {
+          if (existingText.trim().length > 0) {
             const contents = requestPayload.contents;
             const firstUser = Array.isArray(contents) ? contents.find(
               (entry) => entry && typeof entry === "object" && entry.role === "user"

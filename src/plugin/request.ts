@@ -2224,10 +2224,11 @@ export function prepareAntigravityRequest(
             .join("\n\n");
           // Antigravity answers 429 RESOURCE_EXHAUSTED when the harness
           // instructions sit in systemInstruction; the same text is accepted in
-          // the first user turn. Apply the split to every Gemini model. Claude
-          // keeps the original shape (persona + harness in the system prompt).
+          // the first user turn. This applies to every Antigravity model:
+          // Gemini and Claude both answer 429 with the harness in the system
+          // prompt under the current OpenCode harness.
           let movedToUser = false;
-          if (existingText.trim().length > 0 && isGemini3Model(effectiveModel)) {
+          if (existingText.trim().length > 0) {
             const contents = requestPayload.contents;
             const firstUser = Array.isArray(contents)
               ? (contents.find(
