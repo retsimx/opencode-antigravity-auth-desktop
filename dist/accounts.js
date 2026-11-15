@@ -7009,6 +7009,12 @@ function sanitizeCrossModelPayloadInPlace(payload, options) {
   return totalStripped;
 }
 
+// src/plugin/system-prompt.ts
+var ANTIGRAVITY_SYSTEM_PROMPT = `You are Antigravity, a powerful agentic AI coding assistant.
+You are pair programming with a USER in OpenCode to solve their coding task: creating, modifying or debugging code, or answering questions about it.
+Use the tools available to you. Read before editing, keep changes focused, and verify your work before answering.
+Follow the user's instructions and the project's conventions, and respond in the language of the user.`;
+
 // src/plugin/recovery/storage.ts
 import { existsSync as existsSync5, mkdirSync as mkdirSync6, readdirSync as readdirSync2, readFileSync as readFileSync5, unlinkSync as unlinkSync4, writeFileSync as writeFileSync5 } from "node:fs";
 import { join as join8 } from "node:path";
@@ -8153,6 +8159,15 @@ function stripHostClientHeaders(headers) {
     }
   }
 }
+function systemInstructionText(value) {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const parts = value.parts;
+  if (!Array.isArray(parts)) return "";
+  return parts.map(
+    (part) => part && typeof part === "object" && typeof part.text === "string" ? String(part.text) : ""
+  ).filter(Boolean).join("\n\n");
+}
 function prepareAntigravityRequest(input3, init, accessToken, projectId, endpointOverride, headerStyle = "antigravity", forceThinkingRecovery = false, options) {
   if (typeof input3 !== "string" && init?.body === void 0 && input3.body) {
     const requestInput2 = input3;
@@ -8786,37 +8801,41 @@ ${hint}`;
         resolvedProjectId = effectiveProjectId;
         if (headerStyle === "antigravity") {
           const existingSystemInstruction = requestPayload.systemInstruction;
-          if (existingSystemInstruction && typeof existingSystemInstruction === "object") {
-            const sys = existingSystemInstruction;
-            sys.role = "user";
-            if (Array.isArray(sys.parts) && sys.parts.length > 0) {
-              const firstPart = sys.parts[0];
-              if (firstPart && typeof firstPart.text === "string") {
-                firstPart.text = ANTIGRAVITY_SYSTEM_INSTRUCTION + "\n\n" + firstPart.text;
+          const existingText = [
+            ANTIGRAVITY_SYSTEM_INSTRUCTION,
+            systemInstructionText(existingSystemInstruction)
+          ].map((value) => value.trim()).filter(Boolean).join("\n\n");
+          let movedToUser = false;
+          if (existingText.trim().length > 0 && isGemini3Model(effectiveModel)) {
+            const contents = requestPayload.contents;
+            const firstUser = Array.isArray(contents) ? contents.find(
+              (entry) => entry && typeof entry === "object" && entry.role === "user"
+            ) : void 0;
+            if (firstUser) {
+              const parts = Array.isArray(firstUser.parts) ? firstUser.parts : [];
+              const textPart = parts.find(
+                (part) => part && typeof part === "object" && typeof part.text === "string"
+              );
+              if (textPart) {
+                textPart.text = `${existingText}
+
+${String(textPart.text)}`;
               } else {
-                sys.parts = [
-                  { text: ANTIGRAVITY_SYSTEM_INSTRUCTION },
-                  ...sys.parts
-                ];
+                parts.unshift({ text: existingText });
               }
-            } else {
-              sys.parts = [{ text: ANTIGRAVITY_SYSTEM_INSTRUCTION }];
+              firstUser.parts = parts;
+              movedToUser = true;
             }
-          } else if (typeof existingSystemInstruction === "string") {
-            requestPayload.systemInstruction = {
-              role: "user",
-              parts: [
-                {
-                  text: ANTIGRAVITY_SYSTEM_INSTRUCTION + "\n\n" + existingSystemInstruction
-                }
-              ]
-            };
-          } else {
-            requestPayload.systemInstruction = {
-              role: "user",
-              parts: [{ text: ANTIGRAVITY_SYSTEM_INSTRUCTION }]
-            };
           }
+          const systemText = !movedToUser && existingText.trim().length > 0 ? `${ANTIGRAVITY_SYSTEM_PROMPT}
+
+${ANTIGRAVITY_SYSTEM_INSTRUCTION}
+
+${existingText}` : ANTIGRAVITY_SYSTEM_PROMPT;
+          requestPayload.systemInstruction = {
+            role: "user",
+            parts: [{ text: systemText }]
+          };
         }
         const wrappedBody = {
           project: effectiveProjectId,
@@ -14456,6 +14475,7 @@ var createAntigravityRuntime = (providerId) => async ({ client: client2, directo
                 let tokenConsumed = false;
                 let capacityRetryCount = 0;
                 let lastEndpointIndex = -1;
+                let transient429Retries = 0;
                 for (let i = 0; i < ANTIGRAVITY_ENDPOINT_FALLBACKS.length; i++) {
                   if (i !== lastEndpointIndex) {
                     capacityRetryCount = 0;
@@ -14582,6 +14602,22 @@ var createAntigravityRuntime = (providerId) => async ({ client: client2, directo
                         shouldSwitchAccount = true;
                         break;
                       }
+                      if (accountCount2 === 1 && rateLimitReason !== "QUOTA_EXHAUSTED" && !bodyInfo.quotaResetTime && transient429Retries < 3) {
+                        const schedule = [2e3, 5e3, 1e4];
+                        const base = headerRetryMs > 0 ? Math.max(headerRetryMs, schedule[transient429Retries] ?? 1e4) : schedule[transient429Retries] ?? 1e4;
+                        const waitMs = Math.round(base * (0.8 + Math.random() * 0.4));
+                        pushDebug(
+                          `429 (no reset time) on account ${account.index}; short retry ${waitMs}ms (${transient429Retries + 1}/3)`
+                        );
+                        await showToast(
+                          `Rate limited. Retrying in ${Math.max(1, Math.round(waitMs / 1e3))}s...`,
+                          "warning"
+                        );
+                        await sleep(waitMs, abortSignal);
+                        transient429Retries += 1;
+                        i -= 1;
+                        continue;
+                      }
                       const quotaKey2 = headerStyleToQuotaKey(family);
                       const { attempt, delayMs, isDuplicate } = getRateLimitBackoff(account.index, quotaKey2, serverRetryMs);
                       const smartBackoffMs = calculateBackoffMs(rateLimitReason, account.consecutiveFailures ?? 0, serverRetryMs);
@@ -14664,6 +14700,7 @@ var createAntigravityRuntime = (providerId) => async ({ client: client2, directo
                       shouldSwitchAccount = true;
                       break;
                     }
+                    transient429Retries = 0;
                     const quotaKey = headerStyleToQuotaKey(family);
                     resetRateLimitState(account.index, quotaKey);
                     resetAccountFailureState(account.index);
