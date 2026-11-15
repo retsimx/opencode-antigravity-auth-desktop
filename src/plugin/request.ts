@@ -60,6 +60,7 @@ import {
   needsThinkingRecovery,
 } from "./thinking-recovery";
 import { sanitizeCrossModelPayloadInPlace } from "./transform/cross-model-sanitizer";
+import { ANTIGRAVITY_SYSTEM_PROMPT } from "./system-prompt";
 import {
   isGemini3Model,
   isImageGenerationModel,
@@ -1168,6 +1169,21 @@ export function stripHostClientHeaders(headers: Headers): void {
   }
 }
 
+function systemInstructionText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const parts = (value as Record<string, unknown>).parts;
+  if (!Array.isArray(parts)) return "";
+  return parts
+    .map((part) =>
+      part && typeof part === "object" && typeof (part as Record<string, unknown>).text === "string"
+        ? String((part as Record<string, unknown>).text)
+        : "",
+    )
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 export function prepareAntigravityRequest(
   input: string,
   init: RequestInit | undefined,
@@ -1459,7 +1475,6 @@ export function prepareAntigravityRequest(
           needsSignedThinkingWarmup =
             hasToolUse && !hasSignedThinking && !hasCachedThinking;
         }
-
         body = JSON.stringify(wrappedBody);
       } else {
         const requestPayload: Record<string, unknown> = { ...parsedBody };
@@ -2200,44 +2215,57 @@ export function prepareAntigravityRequest(
         // This sets request.systemInstruction.role = "user" and request.systemInstruction.parts[0].text
         if (headerStyle === "antigravity") {
           const existingSystemInstruction = requestPayload.systemInstruction;
-          if (
-            existingSystemInstruction &&
-            typeof existingSystemInstruction === "object"
-          ) {
-            const sys = existingSystemInstruction as Record<string, unknown>;
-            sys.role = "user";
-            if (Array.isArray(sys.parts) && sys.parts.length > 0) {
-              const firstPart = sys.parts[0] as Record<string, unknown>;
-              if (firstPart && typeof firstPart.text === "string") {
-                firstPart.text =
-                  ANTIGRAVITY_SYSTEM_INSTRUCTION + "\n\n" + firstPart.text;
+          const existingText = [
+            ANTIGRAVITY_SYSTEM_INSTRUCTION,
+            systemInstructionText(existingSystemInstruction),
+          ]
+            .map((value) => value.trim())
+            .filter(Boolean)
+            .join("\n\n");
+          // Antigravity throttles (429) requests whose system prompt adds text
+          // after its official prompt. Keep the system prompt byte-identical to
+          // the official one and carry the harness instructions in the first
+          // user turn instead. Verified 2026-11-15: in a failing window,
+          // "official + harness in system" was 429 twice, while "official only"
+          // and "official + harness in the first user message" were both 200.
+          let movedToUser = false;
+          if (existingText.trim().length > 0 && isGemini3Model(effectiveModel)) {
+            const contents = requestPayload.contents;
+            const firstUser = Array.isArray(contents)
+              ? (contents.find(
+                  (entry) =>
+                    entry &&
+                    typeof entry === "object" &&
+                    (entry as Record<string, unknown>).role === "user",
+                ) as Record<string, unknown> | undefined)
+              : undefined;
+            if (firstUser) {
+              const parts = Array.isArray(firstUser.parts)
+                ? (firstUser.parts as unknown[])
+                : [];
+              const textPart = parts.find(
+                (part) =>
+                  part &&
+                  typeof part === "object" &&
+                  typeof (part as Record<string, unknown>).text === "string",
+              ) as Record<string, unknown> | undefined;
+              if (textPart) {
+                textPart.text = `${existingText}\n\n${String(textPart.text)}`;
               } else {
-                sys.parts = [
-                  { text: ANTIGRAVITY_SYSTEM_INSTRUCTION },
-                  ...sys.parts,
-                ];
+                parts.unshift({ text: existingText });
               }
-            } else {
-              sys.parts = [{ text: ANTIGRAVITY_SYSTEM_INSTRUCTION }];
+              firstUser.parts = parts;
+              movedToUser = true;
             }
-          } else if (typeof existingSystemInstruction === "string") {
-            requestPayload.systemInstruction = {
-              role: "user",
-              parts: [
-                {
-                  text:
-                    ANTIGRAVITY_SYSTEM_INSTRUCTION +
-                    "\n\n" +
-                    existingSystemInstruction,
-                },
-              ],
-            };
-          } else {
-            requestPayload.systemInstruction = {
-              role: "user",
-              parts: [{ text: ANTIGRAVITY_SYSTEM_INSTRUCTION }],
-            };
           }
+          const systemText =
+            !movedToUser && existingText.trim().length > 0
+              ? `${ANTIGRAVITY_SYSTEM_PROMPT}\n\n${ANTIGRAVITY_SYSTEM_INSTRUCTION}\n\n${existingText}`
+              : ANTIGRAVITY_SYSTEM_PROMPT;
+          requestPayload.systemInstruction = {
+            role: "user",
+            parts: [{ text: systemText }],
+          };
         }
 
         const wrappedBody: Record<string, unknown> = {
@@ -2259,7 +2287,6 @@ export function prepareAntigravityRequest(
           sessionId = signatureSessionKey;
           (wrappedBody.request as any).sessionId = signatureSessionKey;
         }
-
         body = JSON.stringify(wrappedBody);
       }
     } catch (error) {
