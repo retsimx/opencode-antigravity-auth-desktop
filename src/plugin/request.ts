@@ -2222,12 +2222,10 @@ export function prepareAntigravityRequest(
             .map((value) => value.trim())
             .filter(Boolean)
             .join("\n\n");
-          // Antigravity throttles (429) requests whose system prompt adds text
-          // after its official prompt. Keep the system prompt byte-identical to
-          // the official one and carry the harness instructions in the first
-          // user turn instead. Verified 2026-11-15: in a failing window,
-          // "official + harness in system" was 429 twice, while "official only"
-          // and "official + harness in the first user message" were both 200.
+          // Antigravity answers 429 RESOURCE_EXHAUSTED when the harness
+          // instructions sit in systemInstruction; the same text is accepted in
+          // the first user turn. Apply the split to every Gemini model. Claude
+          // keeps the original shape (persona + harness in the system prompt).
           let movedToUser = false;
           if (existingText.trim().length > 0 && isGemini3Model(effectiveModel)) {
             const contents = requestPayload.contents;
@@ -2258,9 +2256,10 @@ export function prepareAntigravityRequest(
               movedToUser = true;
             }
           }
-          const systemText =
-            !movedToUser && existingText.trim().length > 0
-              ? `${ANTIGRAVITY_SYSTEM_PROMPT}\n\n${ANTIGRAVITY_SYSTEM_INSTRUCTION}\n\n${existingText}`
+          const systemText = movedToUser
+            ? ANTIGRAVITY_SYSTEM_PROMPT
+            : existingText.trim().length > 0
+              ? existingText
               : ANTIGRAVITY_SYSTEM_PROMPT;
           requestPayload.systemInstruction = {
             role: "user",

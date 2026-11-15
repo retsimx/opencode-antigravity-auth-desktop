@@ -8827,11 +8827,7 @@ ${String(textPart.text)}`;
               movedToUser = true;
             }
           }
-          const systemText = !movedToUser && existingText.trim().length > 0 ? `${ANTIGRAVITY_SYSTEM_PROMPT}
-
-${ANTIGRAVITY_SYSTEM_INSTRUCTION}
-
-${existingText}` : ANTIGRAVITY_SYSTEM_PROMPT;
+          const systemText = movedToUser ? ANTIGRAVITY_SYSTEM_PROMPT : existingText.trim().length > 0 ? existingText : ANTIGRAVITY_SYSTEM_PROMPT;
           requestPayload.systemInstruction = {
             role: "user",
             parts: [{ text: systemText }]
