@@ -8,7 +8,7 @@
 
 ## Overview
 
-Antigravity is Google's **Unified Gateway API** for accessing multiple AI models (Gemini; formerly also Claude and GPT-OSS) through a single, consistent Gemini-style interface. It is NOT the same as Vertex AI's direct model APIs.
+Antigravity is Google's **Unified Gateway API** for accessing multiple AI models (Gemini, Claude 5.5 and GPT-OSS) through a single, consistent Gemini-style interface. It is NOT the same as Vertex AI's direct model APIs.
 
 ### Key Characteristics
 
@@ -83,13 +83,15 @@ Accept: text/event-stream
 | Gemini 4 Hydrogen Low / Medium / High / XHigh | `gemini-4-hydrogen-low` / `-medium` / `-high` / `-xhigh` | Google | ⚠️ Paid Google AI Pro or Ultra only; served only to a new enough client User-Agent (`antigravity/cli/1.5.3 ...`); the bare `gemini-4-hydrogen` id is not served |
 | Gemini 4 Neon Low / Medium / High / XHigh | `gemini-4-neon-low` / `-medium` / `-high` / `-xhigh` | Google | ⚠️ Paid Google AI Pro or Ultra only; served only to a new enough client User-Agent (`antigravity/cli/1.5.3 ...`); the bare `gemini-4-neon` id is not served |
 | Gemini 3.8 Flash Low / Medium / High | `gemini-3.8-flash-low` / `-medium` / `-high` | Google | ✅ Verified |
+| Claude Opus 5.5 Low / Medium / High | `claude-opus-5-5-low` / `-medium` / `-high` | Anthropic | ✅ Verified; adaptive thinking (`thinkingLevel`), 1M context / 128K output; the bare `claude-opus-5-5` id is not served |
+| Claude Sonnet 5.5 Low / Medium / High | `claude-sonnet-5-5-low` / `-medium` / `-high` | Anthropic | ✅ Verified; adaptive thinking (`thinkingLevel`), 1M context / 128K output; the bare `claude-sonnet-5-5` id is not served |
 | Gemini 3.1 Pro High / Low | `gemini-pro-agent` / `gemini-3.1-pro-low` | Google | ❌ No longer served |
 | Gemini 3 Flash, 3.1 Flash-Lite, 2.5 | `gemini-3-flash`, `gemini-3.1-flash-lite`, ... | Google | ❌ No longer served |
 | Gemini 3 Pro High / Low | `gemini-3-pro-high` / `gemini-3-pro-low` | Google | ❌ Retired (answers "no longer available") |
 | Gemini 3.5 / 3.6 / 3.7 Flash | `gemini-3.x-flash-*` | Google | ❌ Dropped |
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | Anthropic | ❌ Dropped |
 | Claude Opus 4.6 Thinking | `claude-opus-4-6-thinking` | Anthropic | ❌ Dropped |
-| GPT-OSS 120B Medium | `gpt-oss-120b-medium` | Other | ❌ Dropped |
+| GPT-OSS 120B Medium | `gpt-oss-120b-medium` | Other | ✅ Verified; fixed `medium` tier, 131,072 context / 32,768 output; shares the Claude/GPT quota pool |
 
 ---
 
@@ -369,7 +371,7 @@ The underlying API uses these tool formats:
       "candidatesTokenCount": 4,
       "totalTokenCount": 20
     },
-    "modelVersion": "claude-sonnet-4-6",
+    "modelVersion": "claude-sonnet-5-5-high",
     "responseId": "msg_vrtx_..."
   },
   "traceId": "abc123..."
@@ -476,6 +478,24 @@ For thinking-capable models (`*-thinking`), use:
 ```
 
 **⚠️ IMPORTANT: `maxOutputTokens` must be GREATER than `thinkingBudget`**
+
+### Adaptive Thinking (Claude 5.5)
+
+Claude Opus 5.5 and Sonnet 5.5 take a thinking level instead of a budget. The key is camelCase and the value is uppercased on the wire, like Gemini's:
+
+```json
+{
+  "generationConfig": {
+    "maxOutputTokens": 128000,
+    "thinkingConfig": {
+      "includeThoughts": true,
+      "thinkingLevel": "HIGH"
+    }
+  }
+}
+```
+
+`thinkingLevel` is `LOW`, `MEDIUM` or `HIGH`, matching the tier in the model id (`claude-opus-5-5-low` / `-medium` / `-high`). The bare `claude-opus-5-5` and `claude-sonnet-5-5` ids are not served (404), and there is no `thinking_budget` on these models. Claude 4.x models you configure yourself keep the `-thinking` id and the numeric `thinking_budget` shape above.
 
 ### Thinking Response (Gemini)
 
@@ -585,7 +605,7 @@ The following Anthropic/Vertex AI features are **NOT supported**:
 ```json
 {
   "project": "my-project-id",
-  "model": "claude-sonnet-4-6",
+  "model": "claude-sonnet-5-5-high",
   "request": {
     "contents": [
       {
@@ -628,7 +648,7 @@ The following Anthropic/Vertex AI features are **NOT supported**:
 | Endpoint | `cloudcode-pa.googleapis.com` | `aiplatform.googleapis.com` |
 | Request format | Gemini-style `contents` | Anthropic `messages` |
 | `anthropic_version` | Not used | Required |
-| Model names | Simple (`claude-sonnet-4-6`) | Versioned (`claude-4-5@date`) |
+| Model names | Simple (`claude-sonnet-5-5-high`) | Versioned (`claude-4-5@date`) |
 | Response format | `candidates[]` | Anthropic `content[]` |
 | Multi-model support | Yes (Claude, Gemini, etc.) | Anthropic only |
 

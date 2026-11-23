@@ -81,7 +81,6 @@ export type { GeminiTransformOptions, GeminiTransformResult, ImageConfig } from 
 export {
   sanitizeCrossModelPayload,
   sanitizeCrossModelPayloadInPlace,
-  getModelFamily as getCrossModelFamily,
   stripGeminiThinkingMetadata,
   stripClaudeThinkingFields,
 } from "./cross-model-sanitizer";

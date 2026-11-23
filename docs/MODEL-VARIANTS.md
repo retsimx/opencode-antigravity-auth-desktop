@@ -41,7 +41,8 @@ The plugin accepts different variant formats depending on the model family:
 
 | Model Family | Variant Format | Example |
 |--------------|----------------|---------|
-| **Claude** | `thinkingConfig.thinkingBudget` | `{ "thinkingConfig": { "thinkingBudget": 8192 } }` |
+| **Claude 5.5** | `thinkingLevel` | `{ "thinkingLevel": "high" }` |
+| **Claude 4.x** | `thinkingConfig.thinkingBudget` | `{ "thinkingConfig": { "thinkingBudget": 8192 } }` |
 | **Gemini 3 and 4** | `thinkingLevel` | `{ "thinkingLevel": "high" }` |
 
 ---
@@ -58,7 +59,7 @@ Gemini 3 and Gemini 4 models use string-based thinking levels. Available levels 
 | `high` | ✅ | ✅ | ✅ | ✅ | ✅ | Maximum thinking |
 | `xhigh` | — | — | — | ✅ | ✅ | Extra-high thinking (Hydrogen/Neon only) |
 
-> **Note:** Antigravity serves only Gemini 3.8 Flash, Gemini 4 Argon, Gemini 4 Carbon, Gemini 4 Hydrogen and Gemini 4 Neon, and rejects `"minimal"` on all of them, so the plugin sends `low`. All of them default to `high`.
+> **Note:** Antigravity serves only these Gemini models: Gemini 3.8 Flash, Gemini 4 Argon, Gemini 4 Carbon, Gemini 4 Hydrogen and Gemini 4 Neon, and it rejects `"minimal"` on all of them, so the plugin sends `low`. All of them default to `high`.
 > Gemini 4 Argon, Gemini 4 Carbon, Gemini 4 Hydrogen and Gemini 4 Neon need a paid Google AI Pro or Google AI Ultra subscription; see the README.
 > Any other Gemini model (3 Pro, 3.1 Pro, 3 Flash, 3.1 Flash-Lite, 2.5, the dropped 3.5-3.7 Flash, and the former Gemini CLI models) is served as Gemini 3.8 Flash at the same tier.
 
@@ -81,16 +82,45 @@ Gemini 3 and Gemini 4 models use string-based thinking levels. Available levels 
 
 ---
 
-## Claude Thinking Budget
+## Claude Thinking
 
-Claude models use token-based thinking budgets (in tokens). Google dropped Claude Sonnet 4.6 and Opus 4.6 from Antigravity, so the plugin no longer lists a Claude model; the budget handling below still applies to any Claude model you configure yourself.
+Antigravity serves **Claude Opus 5.5** and **Claude Sonnet 5.5** (`antigravity-claude-opus-5-5`, `antigravity-claude-sonnet-5-5`). They use adaptive thinking: you pick a thinking level, not a token budget.
+
+| Variant | Backend id | `thinkingLevel` |
+|---------|------------|-----------------|
+| `low` | `claude-opus-5-5-low` | `"LOW"` |
+| `medium` | `claude-opus-5-5-medium` | `"MEDIUM"` |
+| `high` (default) | `claude-opus-5-5-high` | `"HIGH"` |
+
+The bare `claude-opus-5-5` and `claude-sonnet-5-5` ids are not served (404), so the plugin sends the tier id that matches the variant. `minimal` is clamped to `low` and `xhigh` to `high`. The request carries `{ includeThoughts: true, thinkingLevel }` — a camelCase key with the level uppercased on the wire, like Gemini's — and never a budget. The context window is 1M tokens and the output limit 128,000. Both models use the Claude / GPT quota pool.
+
+### Claude 5.5 Example
+
+```json
+{
+  "antigravity-claude-opus-5-5": {
+    "name": "Claude Opus 5.5 (Antigravity)",
+    "limit": { "context": 1000000, "output": 128000 },
+    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+    "variants": {
+      "low": { "thinkingLevel": "low" },
+      "medium": { "thinkingLevel": "medium" },
+      "high": { "thinkingLevel": "high" }
+    }
+  }
+}
+```
+
+### Legacy Claude 4.x thinking budgets
+
+Claude 4.x models use token-based thinking budgets (in tokens). Google dropped Claude Sonnet 4.6 and Opus 4.6 from Antigravity, so the plugin lists no Claude 4.x model; the budget handling below applies only to an older Claude model you configure yourself, under a `-thinking` id.
 
 | Variant | Budget | Description |
 |---------|--------|-------------|
 | `low` | 8192 | Light thinking |
 | `max` | 32768 | Maximum thinking |
 
-### Claude Example
+#### Claude 4.x Example
 
 ```json
 {
@@ -150,6 +180,8 @@ Tier-suffixed model names are still accepted:
 - `antigravity-gemini-4-neon-xhigh`
 - `antigravity-gemini-3.8-flash-low`
 - `antigravity-gemini-3.8-flash-high`
+- `antigravity-claude-opus-5-5-high`
+- `antigravity-claude-sonnet-5-5-low`
 - `gemini-3.1-pro-low`
 - `gemini-3-flash-medium`
 

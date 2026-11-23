@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Fork of pieliesdie/opencode-antigravity-auth](https://img.shields.io/badge/fork%20of-pieliesdie%2Fopencode--antigravity--auth-blue)](https://github.com/pieliesdie/opencode-antigravity-auth)
 
-Enable Opencode to authenticate against **Antigravity** (Google's IDE) via OAuth so you can use Antigravity rate limits and access models like `gemini-3.1-pro`, `gemini-3.8-flash`, `gemini-4-argon`, `gemini-4-carbon`, `gemini-4-hydrogen` and `gemini-4-neon` with your Google credentials.
+Enable Opencode to authenticate against **Antigravity** (Google's IDE) via OAuth so you can use Antigravity rate limits and access models like `gemini-3.8-flash`, `gemini-4-argon`, `gemini-4-carbon`, `gemini-4-hydrogen`, `gemini-4-neon`, `claude-opus-5-5` and `gpt-oss-120b-medium` with your Google credentials.
 
 > **This is [Qssaf](https://github.com/Qssaf)'s fork** of
 > [pieliesdie/opencode-antigravity-auth](https://github.com/pieliesdie/opencode-antigravity-auth),
@@ -20,9 +20,10 @@ Enable Opencode to authenticate against **Antigravity** (Google's IDE) via OAuth
 ## What You Get
 
 - **Gemini 4 Argon, Gemini 4 Carbon, Gemini 4 Hydrogen and Gemini 4 Neon** (paid Google AI Pro or Ultra) and **Gemini 3.8 Flash** via Google OAuth (Antigravity)
+- **Claude Opus 5.5, Claude Sonnet 5.5 and GPT-OSS 120B** on Antigravity's Claude/GPT quota pool
 - **Multi-account support** — add multiple Google accounts, auto-rotates when rate-limited
 - **Modern Gemini API support** — use Antigravity SDK-style API keys / Cloud Projects as Gemini backups or opt-in primary routing
-- **Thinking models** — extended thinking for Claude and Gemini 3 with configurable budgets
+- **Thinking models** — extended thinking for Gemini 3 and 4 and for Claude 5.5 with thinking levels, and token budgets for legacy Claude 4.x models
 - **Google Search grounding** — enable web search for Gemini models (auto or always-on), or set `"google_search_tool": false` to leave web search to your other tools
 - **Auto-recovery** — handles session errors and tool failures automatically
 - **Plugin compatible** — works alongside other OpenCode plugins (oh-my-opencode, dcp, etc.)
@@ -136,22 +137,27 @@ opencode run "Hello" --model=google/antigravity-gemini-3.8-flash --variant=high
 
 ### Model Reference
 
-**Antigravity quota** (default routing for Gemini):
+**Antigravity quota** (default routing for Gemini, Claude and GPT-OSS):
 
 | Model | Variants | Notes |
 |-------|----------|-------|
 | `antigravity-gemini-3.8-flash` | low, medium, high | Gemini 3.8 Flash with thinking (high default) |
-| `antigravity-gemini-4-argon` | low, medium, high | **Paid Google AI Pro or Ultra only.** Gemini 4 Argon with thinking (high default, 1M context) |
+| `antigravity-gemini-4-argon` | low, medium, high | **Paid Google AI Pro or Ultra only.** Gemini 4 Argon with thinking (high default, 1M context, 64K output) |
 | `antigravity-gemini-4-carbon` | low, medium, high | **Paid Google AI Pro or Ultra only.** Gemini 4 Carbon with thinking (high default, 1M context, 256K output) |
-| `antigravity-gemini-4-hydrogen` | low, medium, high, xhigh | **Paid Google AI Pro or Ultra only.** Gemini 4 Hydrogen with thinking (high default, 1M context) |
-| `antigravity-gemini-4-neon` | low, medium, high, xhigh | **Newest. Paid Google AI Pro or Ultra only.** Gemini 4 Neon with thinking (high default, 1M context) |
+| `antigravity-gemini-4-hydrogen` | low, medium, high, xhigh | **Paid Google AI Pro or Ultra only.** Gemini 4 Hydrogen with thinking (high default, 1M context, 256K output) |
+| `antigravity-gemini-4-neon` | low, medium, high, xhigh | **Newest. Paid Google AI Pro or Ultra only.** Gemini 4 Neon with thinking (high default, 1M context, 256K output) |
 | `antigravity-gemini-4-hydrogen-sonar` | low, medium, high | Gemini 4 Hydrogen Sonar (low default, 1M context). Offered only when Google serves it to one of your accounts; it appears a moment after OpenCode starts |
+| `antigravity-claude-opus-5-5` | low, medium, high | Claude Opus 5.5 with adaptive thinking (`thinkingLevel`, not a token budget; high default, 1M context, 128K output). Sent as `claude-opus-5-5-<level>`, because the bare id is not served |
+| `antigravity-claude-sonnet-5-5` | low, medium, high | Claude Sonnet 5.5 with adaptive thinking (`thinkingLevel`, not a token budget; high default, 1M context, 128K output). Sent as `claude-sonnet-5-5-<level>`, because the bare id is not served |
+| `antigravity-gpt-oss-120b-medium` | — (fixed `medium` tier) | GPT-OSS 120B (131K context, 32K output). Google serves it only at its medium tier, so there is no variant |
 
 > **Gemini 4 Hydrogen Sonar does not stream.** Google sends nothing, not even its thinking, until the whole step is done, so a chat looks frozen while it works. How long depends on how busy Google is, not on the account: with `high`, steps averaged 10–20 s on 2026-11-20 and 20–45 s the next morning, with single steps up to 3 minutes, on every account alike. On one test prompt, `low` and `medium` used 30–40% of `high`'s thinking. Use them when the wait matters.
 
 > **Gemini 4 Argon, Gemini 4 Carbon, Gemini 4 Hydrogen and Gemini 4 Neon need a paid Google AI Pro or Google AI Ultra subscription.** Free plans, Google AI Plus and Pro free trials do not include them. The plugin cannot read your subscription, so it learns it from Google: an account Google refuses any of them for is skipped for an hour and the next account is tried. When no signed-in account may use it, the request is answered with a message saying so instead of an error. With an API key configured (`agy_sdk`), the model is tried through the public Gemini API before that message.
 
-> Antigravity now serves only Gemini 3.8 Flash, Gemini 4 Argon, Gemini 4 Carbon, Gemini 4 Hydrogen, Gemini 4 Neon and Gemini 4 Hydrogen Sonar. Google dropped Gemini 3.5, 3.6 and 3.7 Flash, Claude Sonnet 4.6, Claude Opus 4.6 and GPT-OSS from it, and no longer serves Gemini 3 Pro, 3.1 Pro, 3 Flash, 3.1 Flash-Lite or 2.5 there either. An `antigravity-` request for any of those (with or without a tier suffix) goes to Gemini 3.8 Flash at the same tier, so sessions still set to an old model keep working. Gemini 2 is gone from every route: a request for any Gemini 2 model is sent as Gemini 3.8 Flash.
+> **Two quota pools.** Google reports one `Gemini` pool and one `Claude / GPT` pool, each with a weekly and a 5-hour bucket; whichever empties first blocks the request. Gemini models draw on `Gemini`, while Claude 5.5 and GPT-OSS draw on `Claude / GPT`. The account menu's "Check quotas" and `antigravity-accounts quota` show both.
+
+> Antigravity now serves Gemini 3.8 Flash, Gemini 4 Argon, Gemini 4 Carbon, Gemini 4 Hydrogen, Gemini 4 Neon, Gemini 4 Hydrogen Sonar, Claude Opus 5.5, Claude Sonnet 5.5 and GPT-OSS 120B. Google dropped Gemini 3.5, 3.6 and 3.7 Flash, Claude Sonnet 4.6 and Claude Opus 4.6 from it, and no longer serves Gemini 3 Pro, 3.1 Pro, 3 Flash, 3.1 Flash-Lite or 2.5 there either. An `antigravity-` request for any of those retired Gemini models (with or without a tier suffix) goes to Gemini 3.8 Flash at the same tier, so sessions still set to an old Gemini model keep working. A retired Claude 4.6 id is not remapped: point a session still set to one at Claude Opus 5.5 or Sonnet 5.5. Gemini 2 is gone from every route: a request for any Gemini 2 model is sent as Gemini 3.8 Flash.
 
 > **The Gemini CLI quota is gone.** Google deprecated it in favour of Antigravity and the Antigravity CLI, which share the Antigravity quota. The former Gemini CLI models (`gemini-3.8-flash`, `gemini-3.1-pro`, `gemini-3-pro-preview`, `gemini-3-flash-preview`, `gemini-3.1-pro-preview-customtools`) are no longer listed, and a request for one is served on Antigravity as Gemini 3.8 Flash. `cli_first` is ignored.
 
@@ -698,7 +704,7 @@ Set `prefer_for_gemini: true` if you want Gemini models to use the newer Gemini 
 | `quota_refresh_interval_minutes` | `15` | Background quota refresh interval. After successful API requests, refreshes quota cache if older than this interval. Set to `0` to disable. |
 | `soft_quota_cache_ttl_minutes` | `"auto"` | How long quota cache is considered fresh. `"auto"` = max(2 × refresh interval, 10 minutes). Set a number (1-120) for fixed TTL. |
 
-> **How it works**: Quota cache is refreshed automatically after API requests (when older than `quota_refresh_interval_minutes`) and manually via "Check quotas" in `opencode auth login`. The threshold check uses `soft_quota_cache_ttl_minutes` to determine cache freshness - if cache is older, the account is considered "unknown" and allowed (fail-open). When ALL accounts exceed the threshold, the plugin waits for the earliest quota reset time (like rate limit behavior). If wait time exceeds `max_rate_limit_wait_seconds`, it errors immediately.
+> **How it works**: Quota cache is refreshed automatically after API requests (when older than `quota_refresh_interval_minutes`) and manually via "Check quotas" in `opencode auth login`. The threshold is measured per pool — `Gemini` or `Claude / GPT`, whichever the requested model draws on — not for the account as a whole. The threshold check uses `soft_quota_cache_ttl_minutes` to determine cache freshness - if cache is older, the account is considered "unknown" and allowed (fail-open). When ALL accounts exceed the threshold, the plugin waits for the earliest quota reset time (like rate limit behavior). If wait time exceeds `max_rate_limit_wait_seconds`, it errors immediately.
 
 ### Rate Limit Scheduling
 
