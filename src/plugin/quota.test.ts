@@ -126,9 +126,9 @@ describe("Antigravity quota aggregation", () => {
       },
     });
 
-    // The disabled id's full quota neither becomes the group's representative
+    // The disabled id's full quota neither becomes the pool's representative
     // reading nor adds to its model count.
-    expect(summary.groups["gemini-pro"]).toEqual({
+    expect(summary.groups.gemini).toEqual({
       remainingFraction: 0.25,
       resetTime: "2026-05-27T18:00:00Z",
       modelCount: 1,
@@ -191,7 +191,7 @@ describe("Antigravity quota aggregation", () => {
       },
     });
 
-    expect(summary.groups["gemini-flash"]).toEqual({
+    expect(summary.groups.gemini).toEqual({
       remainingFraction: 0.2,
       resetTime: "2026-05-27T18:00:00Z",
       modelCount: 1,
@@ -284,7 +284,7 @@ describe("Antigravity quota aggregation", () => {
     expect(summary.groups.gemini?.resetTime).toBeUndefined();
   });
 
-  it("puts Gemini 4 Hydrogen in the shared Gemini Flash group with 3.8 Flash", () => {
+  it("puts Gemini 4 Hydrogen in the shared Gemini pool with 3.8 Flash", () => {
     const summary = __testExports.aggregateQuota({
       "gemini-3.8-flash-low": {
         displayName: "Gemini 3.8 Flash Low",
@@ -296,12 +296,11 @@ describe("Antigravity quota aggregation", () => {
       },
     });
 
-    expect(summary.groups["gemini-flash"]?.modelCount).toBe(2);
-    expect(summary.groups["gemini-pro"]).toBeUndefined();
+    expect(summary.groups.gemini?.modelCount).toBe(2);
     expect(summary.modelCount).toBe(2);
   });
 
-  it("creates the Gemini Flash group for Gemini 4 Hydrogen alone", () => {
+  it("creates the Gemini pool for Gemini 4 Hydrogen alone", () => {
     const summary = __testExports.aggregateQuota({
       "gemini-4-hydrogen-high": {
         displayName: "Gemini 4 Hydrogen High",
@@ -309,15 +308,14 @@ describe("Antigravity quota aggregation", () => {
       },
     });
 
-    expect(summary.groups["gemini-flash"]).toEqual({
+    expect(summary.groups.gemini).toEqual({
       remainingFraction: 0.4,
       resetTime: "2026-05-27T18:00:00Z",
       modelCount: 1,
     });
-    expect(summary.groups["gemini-pro"]).toBeUndefined();
   });
 
-  it("puts Gemini 4 Neon in the shared Gemini Flash group with 3.8 Flash and Hydrogen", () => {
+  it("puts Gemini 4 Neon in the shared Gemini pool with 3.8 Flash and Hydrogen", () => {
     const summary = __testExports.aggregateQuota({
       "gemini-3.8-flash-low": {
         displayName: "Gemini 3.8 Flash Low",
@@ -333,8 +331,7 @@ describe("Antigravity quota aggregation", () => {
       },
     });
 
-    expect(summary.groups["gemini-flash"]?.modelCount).toBe(3);
-    expect(summary.groups["gemini-pro"]).toBeUndefined();
+    expect(summary.groups.gemini?.modelCount).toBe(3);
     expect(summary.modelCount).toBe(3);
   });
 });

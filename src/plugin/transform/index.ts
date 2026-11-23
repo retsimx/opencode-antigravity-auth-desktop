@@ -30,9 +30,11 @@ export {
   resolveAntigravityGemini4NeonBackendModel,
   resolveAntigravityGemini3ProBackendModel,
   resolveAntigravityGeminiBackend,
+  resolveAntigravityClaude5BackendModel,
   remapRetiredAntigravityGeminiModel,
   remapDroppedGeminiModel,
   isGemini2Model,
+  isAdaptiveClaude5Model,
   toAntigravityWireModel,
   isGemini3ProModel,
   isGemini3OrLaterModel,
@@ -42,7 +44,6 @@ export {
   isGemini4NeonModel,
   clampThinkingLevelForModel,
   getDefaultGemini3ThinkingLevel,
-  getModelFamily,
   MODEL_ALIASES,
   THINKING_TIER_BUDGETS,
   GEMINI_3_THINKING_LEVELS,
@@ -58,11 +59,9 @@ export {
   ensureClaudeMaxOutputTokens,
   appendClaudeThinkingHint,
   normalizeClaudeTools,
-  applyClaudeTransforms,
   CLAUDE_THINKING_MAX_OUTPUT_TOKENS,
   CLAUDE_INTERLEAVED_THINKING_HINT,
 } from "./claude";
-export type { ClaudeTransformOptions, ClaudeTransformResult } from "./claude";
 
 // Gemini transforms
 export {

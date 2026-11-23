@@ -127,7 +127,8 @@ function supportsThinkingTiers(model: string): boolean {
   const lower = model.toLowerCase();
   return (
     isGemini3OrLaterModel(lower) ||
-    (lower.includes("claude") && lower.includes("thinking"))
+    (lower.includes("claude") && lower.includes("thinking")) ||
+    isAdaptiveClaude5Model(lower)
   );
 }
 
@@ -161,7 +162,8 @@ function isThinkingCapableModel(model: string): boolean {
   const lower = model.toLowerCase();
   return (
     lower.includes("thinking") ||
-    isGemini3OrLaterModel(lower)
+    isGemini3OrLaterModel(lower) ||
+    isAdaptiveClaude5Model(lower)
   );
 }
 
@@ -179,6 +181,45 @@ export function isGemini3FlashModel(model: string): boolean {
  */
 export function isGemini3OrLaterModel(model: string): boolean {
   return GEMINI_3_OR_LATER_REGEX.test(model);
+}
+
+/**
+ * Claude 5 dropped the `-thinking` suffix for adaptive thinking: Antigravity
+ * serves claude-{opus,sonnet}-<version> only as tier-specific ids, e.g.
+ * claude-opus-5-5-{low,medium,high}. The anchored pattern also excludes
+ * `-disabled` ids, which never match.
+ */
+const CLAUDE_5_ADAPTIVE_REGEX =
+  /^claude-(opus|sonnet)-(5(?:[.-]\d+)+)(?:-(minimal|low|medium|high))?$/i;
+
+/** True for a Claude 5 adaptive-thinking id, with or without a tier or quota prefix. */
+export function isAdaptiveClaude5Model(model: string): boolean {
+  return CLAUDE_5_ADAPTIVE_REGEX.test(model.replace(QUOTA_PREFIX_REGEX, ""));
+}
+
+/**
+ * Picks the Antigravity backend id for a Claude 5 model and the thinking level
+ * to send with it: claude-{opus,sonnet}-5-5-{low,medium,high}. The bare id 404s,
+ * so an untiered id gets high (like the Gemini tiered helpers). minimal becomes
+ * low; xhigh, which no Claude 5 model serves, becomes high.
+ */
+export function resolveAntigravityClaude5BackendModel(
+  model: string,
+  thinkingLevel?: string,
+): string | undefined {
+  const match = model
+    .toLowerCase()
+    .replace(QUOTA_PREFIX_REGEX, "")
+    .match(CLAUDE_5_ADAPTIVE_REGEX);
+  if (!match) {
+    return undefined;
+  }
+  const [, family, version, tier] = match;
+  const rawLevel = (thinkingLevel ?? tier ?? "high").toLowerCase();
+  const backend = `claude-${family}-${version?.replace(/\./g, "-")}`;
+  if (rawLevel === "low" || rawLevel === "minimal") return `${backend}-low`;
+  if (rawLevel === "medium") return `${backend}-medium`;
+  return `${backend}-high`;
 }
 
 /**
@@ -539,6 +580,12 @@ function resolveModel(requestedModel: string, onAntigravity: boolean): ResolvedM
   //                  resolveAntigravityGemini*BackendModel helpers);
   //                  other gemini-3-flash models use bare name + thinkingLevel param.
   // Pro defaults to the high tier unless an explicit tier is provided.
+  // Claude 5 adaptive thinking is also served as tier-specific backend ids, so
+  // it resolves the same way on the Antigravity and alias paths.
+  const claude5BackendModel = isImageModel
+    ? undefined
+    : resolveAntigravityClaude5BackendModel(modelWithoutQuota, tier);
+  // Pro defaults to the high tier unless an explicit tier is provided.
   const isGemini3Flash = isGemini3FlashModel(modelWithoutQuota);
 
   let effectiveTier = tier;
@@ -566,9 +613,16 @@ function resolveModel(requestedModel: string, onAntigravity: boolean): ResolvedM
     } else if (isGemini3Flash && effectiveTier) {
       antigravityModel = baseName;
     }
+  } else if (claude5BackendModel) {
+    antigravityModel = claude5BackendModel;
+    effectiveTier = claude5BackendModel.endsWith("-low")
+      ? "low"
+      : claude5BackendModel.endsWith("-medium")
+        ? "medium"
+        : "high";
   }
 
-  const actualModel = skipAlias
+  const actualModel = skipAlias || claude5BackendModel
     ? antigravityModel
     : MODEL_ALIASES[modelWithoutQuota] || MODEL_ALIASES[baseName] || baseName;
 
@@ -582,6 +636,18 @@ function resolveModel(requestedModel: string, onAntigravity: boolean): ResolvedM
       actualModel: resolvedModel,
       isThinkingModel: false,
       isImageModel: true,
+      quotaPreference,
+      explicitQuota,
+    };
+  }
+
+  // Claude 5 adaptive thinking takes a thinkingLevel, like Gemini 3, not a budget.
+  if (claude5BackendModel) {
+    return {
+      actualModel: resolvedModel,
+      thinkingLevel: effectiveTier,
+      tier: effectiveTier,
+      isThinkingModel: true,
       quotaPreference,
       explicitQuota,
     };
@@ -650,26 +716,6 @@ function resolveModel(requestedModel: string, onAntigravity: boolean): ResolvedM
     quotaPreference,
     explicitQuota,
   };
-}
-
-/**
- * Gets the model family for routing decisions.
- */
-export function getModelFamily(
-  model: string,
-): "claude" | "gemini-flash" | "gemini-pro" {
-  const lower = model.toLowerCase();
-  if (lower.includes("claude")) {
-    return "claude";
-  }
-  if (
-    lower.includes("flash") ||
-    isGemini4HydrogenModel(lower) ||
-    isGemini4NeonModel(lower)
-  ) {
-    return "gemini-flash";
-  }
-  return "gemini-pro";
 }
 
 /**

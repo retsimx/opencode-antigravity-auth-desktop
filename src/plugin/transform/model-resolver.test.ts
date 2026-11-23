@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   clampThinkingLevelForModel,
   getDefaultGemini3ThinkingLevel,
-  getModelFamily,
   isGemini4CarbonModel,
   isGemini4HydrogenModel,
   isGemini4NeonModel,
@@ -15,6 +14,8 @@ import {
   resolveModelWithVariant,
   resolveModelForHeaderStyle,
   isDisabledRegistryModelId,
+  isAdaptiveClaude5Model,
+  resolveAntigravityClaude5BackendModel,
 } from "./model-resolver";
 import type { ThinkingTier } from "./types";
 
@@ -430,12 +431,6 @@ describe("resolveModelWithTier", () => {
       expect(isGemini4HydrogenModel("antigravity-gemini-4-hydrogen-sonar")).toBe(false);
       expect(isGemini4HydrogenModel("gemini-4-argon-high")).toBe(false);
     });
-
-    it("belongs to the Gemini Flash family, like 3.8 Flash", () => {
-      expect(getModelFamily("antigravity-gemini-4-hydrogen")).toBe("gemini-flash");
-      expect(getModelFamily("gemini-4-hydrogen-xhigh")).toBe("gemini-flash");
-      expect(getModelFamily("gemini-3.8-flash")).toBe("gemini-flash");
-    });
   });
 
   describe("Gemini 4 Neon", () => {
@@ -507,12 +502,6 @@ describe("resolveModelWithTier", () => {
       expect(isGemini4NeonModel("gemini-4-hydrogen")).toBe(false);
       expect(isGemini4NeonModel("gemini-4-argon-high")).toBe(false);
       expect(isGemini4NeonModel("gemini-3.8-flash")).toBe(false);
-    });
-
-    it("belongs to the Gemini Flash family, like 3.8 Flash and Hydrogen", () => {
-      expect(getModelFamily("gemini-4-neon")).toBe("gemini-flash");
-      expect(getModelFamily("antigravity-gemini-4-neon")).toBe("gemini-flash");
-      expect(getModelFamily("gemini-4-neon-xhigh")).toBe("gemini-flash");
     });
   });
 
@@ -590,6 +579,54 @@ describe("resolveModelWithTier", () => {
       ["high", "gemini-4-argon", "high"],
     ])("clamps %s for %s to %s", (level, model, expected) => {
       expect(clampThinkingLevelForModel(level as ThinkingTier, model)).toBe(expected);
+    });
+  });
+
+  describe("Claude 5 adaptive thinking", () => {
+    it.each([
+      ["claude-opus-5-5", "claude-opus-5-5-high", "high"],
+      ["antigravity-claude-opus-5-5", "claude-opus-5-5-high", "high"],
+      ["claude-sonnet-5-5", "claude-sonnet-5-5-high", "high"],
+      ["antigravity-claude-sonnet-5-5-medium", "claude-sonnet-5-5-medium", "medium"],
+      ["antigravity-claude-opus-5-5-low", "claude-opus-5-5-low", "low"],
+      ["claude-opus-5-5-minimal", "claude-opus-5-5-low", "low"],
+    ])("maps %s to the tiered backend id %s", (requested, actual, thinkingLevel) => {
+      const result = resolveModelWithTier(requested);
+
+      expect(result.actualModel).toBe(actual);
+      expect(result.thinkingLevel).toBe(thinkingLevel);
+      expect(result.thinkingBudget).toBeUndefined();
+      expect(result.isThinkingModel).toBe(true);
+      expect(result.quotaPreference).toBe("antigravity");
+    });
+
+    it("defaults to high, sends minimal as low and xhigh as high", () => {
+      expect(resolveAntigravityClaude5BackendModel("claude-opus-5-5")).toBe("claude-opus-5-5-high");
+      expect(resolveAntigravityClaude5BackendModel("claude-opus-5-5", "minimal")).toBe("claude-opus-5-5-low");
+      expect(resolveAntigravityClaude5BackendModel("claude-opus-5-5", "xhigh")).toBe("claude-opus-5-5-high");
+      expect(resolveAntigravityClaude5BackendModel("claude-opus-5-5-low")).toBe("claude-opus-5-5-low");
+    });
+
+    it("preserves the family and version from the input", () => {
+      expect(resolveAntigravityClaude5BackendModel("claude-sonnet-5-6", "low")).toBe("claude-sonnet-5-6-low");
+      expect(resolveAntigravityClaude5BackendModel("claude-sonnet-5.5")).toBe("claude-sonnet-5-5-high");
+      expect(resolveAntigravityClaude5BackendModel("claude-opus-4-6")).toBeUndefined();
+    });
+
+    it("recognizes adaptive ids but not disabled ones or Claude 4.x", () => {
+      expect(isAdaptiveClaude5Model("claude-opus-5-5")).toBe(true);
+      expect(isAdaptiveClaude5Model("antigravity-claude-sonnet-5-5-high")).toBe(true);
+      expect(isAdaptiveClaude5Model("claude-opus-5-5-disabled")).toBe(false);
+      expect(isAdaptiveClaude5Model("claude-opus-4-6-thinking")).toBe(false);
+      expect(isAdaptiveClaude5Model("gemini-3.8-flash")).toBe(false);
+    });
+
+    it("resolves a bare Claude 5 id through the header-style entry point", () => {
+      const result = resolveModelForHeaderStyle("antigravity-claude-opus-5-5", "antigravity");
+
+      expect(result.actualModel).toBe("claude-opus-5-5-high");
+      expect(result.thinkingLevel).toBe("high");
+      expect(result.explicitQuota).toBe(true);
     });
   });
 
